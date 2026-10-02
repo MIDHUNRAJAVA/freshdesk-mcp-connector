@@ -29,6 +29,8 @@ docker compose up --build -d fake && docker compose run --rm -T mcp < scripts/sa
 2. [internal/tools](internal/tools): the six tools the agent can call.
 3. [internal/shield](internal/shield): how hidden instructions in tickets are fenced and flagged.
 
+**How this was built:** I designed the approach and chose the guardrails, and I used Claude Code (an AI coding assistant) to write, test and review the code with me. The commit history shows this openly. I can explain and change any part of it.
+
 **Honest status:** tested against a fake Freshdesk server that I wrote from the public API documentation, plus one call to the real service with a bad key and the official MCP Inspector. **It has not been run against an authenticated real Freshdesk account.**
 
 ---
