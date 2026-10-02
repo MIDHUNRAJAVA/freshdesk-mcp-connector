@@ -1,12 +1,39 @@
-# Freshdesk MCP Connector
+# Freshdesk MCP Connector: a read-only, privacy-first window into support tickets for AI agents
 
-**What is this?** A small program that lets an AI agent read support tickets from Freshdesk (a help desk tool) without being able to change anything.
-**Who is it for?** Teams building agents, for example in Razorpay's Agent Studio, that need to look at a merchant's support tickets.
-**Why is it safe?** It can only read, it hides email addresses and phone numbers before the agent sees them, it limits how much data one call can return, and it writes an audit line for every call.
+[![CI](https://github.com/MIDHUNRAJAVA/freshdesk-mcp-connector/actions/workflows/ci.yml/badge.svg)](https://github.com/MIDHUNRAJAVA/freshdesk-mcp-connector/actions/workflows/ci.yml)
 
-MCP (Model Context Protocol) is a standard way for an AI agent to discover and call tools that live in another program. This connector is such a program: the agent starts it, asks "what tools do you have?", then calls them.
+This is a small program, written in Go with no outside libraries, that lets an AI agent look up support tickets in Freshdesk (a help desk tool). It is for teams building agents, for example on Razorpay's Agent Studio, who need an agent to read a merchant's tickets. It is safe because it can only read, it hides emails and phone numbers before the agent sees them, and it treats ticket text from customers as untrusted data, not as orders.
 
-This was written as a take-home assignment (Agent Studio, assignment 3: a private connector for a merchant tool). It has been tested against a fake Freshdesk server that I wrote from the public API documentation. **It has not been run against a real Freshdesk account.**
+**Try it in 60 seconds** (no account, no keys, invented data):
+
+```
+make demo     # builds, starts a fake Freshdesk, plays a short agent session (needs Go)
+make evals    # 10 support questions replayed against the tools, pass/fail table
+docker compose up --build -d fake && docker compose run --rm -T mcp < scripts/sample-requests.jsonl && docker compose down   # same, no Go needed
+```
+
+**What the reviewer can check**
+
+| Brief asks for | Where to look |
+|---|---|
+| Authentication | [Setup](#setup-and-run-real-freshdesk) and [Configuration](#configuration) below; why a key and not OAuth: [docs/DESIGN.md](docs/DESIGN.md) |
+| List, get, search tickets | [internal/tools](internal/tools) and [The tools](#the-tools); real captured output: [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) |
+| Rate limits | [internal/limiter](internal/limiter), [internal/freshdesk](internal/freshdesk); the retry demo is in [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) |
+| MCP tool specification | [docs/mcp-tools.json](docs/mcp-tools.json) (a test keeps it current) |
+| What the agent can and cannot do | [What the agent can and cannot do](#what-the-agent-can-and-cannot-do) below |
+| Setup and limitations | [Setup](#setup-and-run-real-freshdesk), [docs/LIMITS.md](docs/LIMITS.md), [docs/REAL_TESTING.md](docs/REAL_TESTING.md) |
+| Fit with Agent Studio, rollout | [docs/AGENT_STUDIO_FIT.md](docs/AGENT_STUDIO_FIT.md), [docs/MERCHANT_PLAYBOOK.md](docs/MERCHANT_PLAYBOOK.md) |
+
+**Start here** (three files):
+1. [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): a 2-minute story with real captured output.
+2. [internal/tools](internal/tools): the six tools the agent can call.
+3. [internal/shield](internal/shield): how hidden instructions in tickets are fenced and flagged.
+
+**Honest status:** tested against a fake Freshdesk server that I wrote from the public API documentation, plus one call to the real service with a bad key and the official MCP Inspector. **It has not been run against an authenticated real Freshdesk account.**
+
+---
+
+MCP (Model Context Protocol) is a standard way for an AI agent to discover and call tools that live in another program. This connector is such a program: the agent starts it, asks "what tools do you have?", then calls them. It was written as a take-home assignment (Agent Studio, assignment 3: a private connector for a merchant tool).
 
 ## What makes this different
 
@@ -208,7 +235,7 @@ make cover     # prints total coverage
 make evals     # the 10 behaviour checks
 ```
 
-Measured with `make cover`: 85.8% of statements overall (the two `main` programs have no tests and pull the total down; the packages under `internal/` range from 87% to 100%; `internal/shield` is 100%). Tests use `net/http/httptest` and a fake clock, so retries and cooldowns run instantly. They cover the auth header, pagination, search, 429 with Retry-After, server-error backoff, giving up after the maximum retries, 401 and 404 mapping, masking, the circuit breaker, the cache, request merging, and a full MCP session over in-memory pipes.
+Measured with `make cover`: 85.9% of statements overall (the two `main` programs have no tests and pull the total down; every package that has tests is between 87% and 100%; `internal/shield` is 100%; `internal/clock`, a few lines wrapping the system time, has no tests). The suite has 94 top-level tests (157 counting subtests), all passing with `-race`. Tests use `net/http/httptest` and a fake clock, so retries and cooldowns run instantly. They cover the auth header, pagination, search, 429 with Retry-After, server-error backoff, giving up after the maximum retries, 401 and 404 mapping, masking, the circuit breaker, the cache, request merging, and a full MCP session over in-memory pipes.
 
 ## What each package does
 
