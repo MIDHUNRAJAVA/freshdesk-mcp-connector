@@ -23,3 +23,4 @@ The official MCP Inspector (the reference tool for MCP servers, run in command-l
 - **An authenticated call to a real Freshdesk account** (real tickets, real search syntax, real pagination). It needs a Freshdesk account and API key. Until that is done, treat list, get, search and conversation calls as tested against the public API documentation only.
 - **Agent Studio itself.** The example config in the README is a generic one.
 - Behaviour under a real, sustained rate limit. The 429 and `Retry-After` logic is tested against the fake server only.
+- **GitHub Actions CI.** The workflow in `.github/workflows/ci.yml` (gofmt check, `go vet`, `go test -race`) has not run yet because the repository has not been pushed. It will run on the first push. The same three checks pass on my machine (`make lint` and `make race`).
