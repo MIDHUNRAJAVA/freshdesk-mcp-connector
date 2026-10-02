@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -279,12 +280,24 @@ func (c *Client) once(ctx context.Context, target string) attempt {
 }
 
 func (c *Client) recordRateLimit(h http.Header) {
-	if v, err := strconv.ParseInt(h.Get("X-Ratelimit-Total"), 10, 64); err == nil {
+	if v, ok := parseCount(h.Get("X-Ratelimit-Total")); ok {
 		c.rlTotal.Store(v)
 	}
-	if v, err := strconv.ParseInt(h.Get("X-Ratelimit-Remaining"), 10, 64); err == nil {
+	if v, ok := parseCount(h.Get("X-Ratelimit-Remaining")); ok {
 		c.rlRemaining.Store(v)
 	}
+}
+
+// parseCount reads a whole-number header value. The real Freshdesk sends
+// these numbers with a decimal point ("5000.0"), which a plain integer parse
+// rejects, so we read a float and round down. This was found by calling the
+// real service, not by the tests that use the fake server.
+func parseCount(v string) (int64, bool) {
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil || f < 0 {
+		return 0, false
+	}
+	return int64(f), true
 }
 
 // parseRetryAfter understands both "120" (seconds) and an HTTP date.

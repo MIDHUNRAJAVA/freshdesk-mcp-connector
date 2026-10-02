@@ -86,6 +86,8 @@ docker run --rm -i -e FRESHDESK_DOMAIN=yourcompany -e FRESHDESK_API_KEY freshdes
 
 The connector talks over standard input and output, so it opens no network port. It also refuses to send an API key over plain `http` unless the address is `localhost`, so in the compose demo the two containers share one network and reach each other at `localhost`.
 
+**Tested against real software, not only my fake:** a real Freshdesk response (found and fixed a real bug) and the official MCP Inspector. What is still untested is written down in [docs/REAL_TESTING.md](docs/REAL_TESTING.md).
+
 ## Setup and run (real Freshdesk)
 
 1. In Freshdesk, create or choose an agent account with the least access that still lets it see the tickets you need (a read-focused role). Find its API key under your profile settings. Never reuse an administrator's key.

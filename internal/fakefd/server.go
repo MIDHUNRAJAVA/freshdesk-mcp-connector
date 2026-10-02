@@ -109,8 +109,8 @@ func (s *server) chaos() (status, retryAfter int, fail bool) {
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Ratelimit-Total", "100")
-	w.Header().Set("X-Ratelimit-Remaining", "97")
+	w.Header().Set("X-Ratelimit-Total", "100.0")
+	w.Header().Set("X-Ratelimit-Remaining", "97.0")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

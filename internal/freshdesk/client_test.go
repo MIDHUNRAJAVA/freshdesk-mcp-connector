@@ -504,3 +504,26 @@ func TestMalformedJSONIsUpstreamError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// The real Freshdesk sends these headers with a decimal point ("5000.0").
+func TestParseCount(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int64
+		ok   bool
+	}{
+		{"5000", 5000, true},
+		{"5000.0", 5000, true},
+		{" 4979.0 ", 4979, true},
+		{"0.0", 0, true},
+		{"", 0, false},
+		{"abc", 0, false},
+		{"-1", 0, false},
+	}
+	for _, tc := range cases {
+		got, ok := parseCount(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("parseCount(%q) = %d, %v; want %d, %v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
