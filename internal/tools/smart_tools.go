@@ -8,6 +8,7 @@ import (
 	"freshdesk-mcp-connector/internal/brief"
 	"freshdesk-mcp-connector/internal/freshdesk"
 	"freshdesk-mcp-connector/internal/mcp"
+	"freshdesk-mcp-connector/internal/shield"
 	"freshdesk-mcp-connector/internal/similar"
 )
 
@@ -25,7 +26,7 @@ func (t *toolset) ticketBrief() mcp.Tool {
 		Name: "freshdesk_ticket_brief",
 		Description: "A short, rule-based summary of one ticket: who is waiting and for how long, the customer's last message, " +
 			"whether it is past its due time, warning signs, and a suggested next step. Computed locally from the ticket and its replies; no AI service is used. " +
-			"The suggestion is a hint for a person or agent to review, not an action taken.",
+			"The suggestion is a hint for a person or agent to review, not an action taken." + untrustedNote,
 		InputSchema: object(props{"ticket_id": ticketID}, "ticket_id"),
 		Handler:     t.handleBrief,
 	}
@@ -51,11 +52,19 @@ func (t *toolset) handleBrief(ctx context.Context, raw json.RawMessage) (string,
 	for i := range convs {
 		t.prepareConversation(&convs[i])
 	}
+	notes := tk.SecurityNotes
+	for _, c := range convs {
+		notes = shield.Merge(notes, c.SecurityNotes)
+	}
+	bf := brief.Build(*tk, convs, complete, t.Now())
+	bf.Subject = shield.Fence(bf.Subject)
+	bf.LastCustomerMessage = shield.Fence(bf.LastCustomerMessage)
 	out := struct {
-		Brief     brief.Brief    `json:"brief"`
-		RateLimit *rateLimitInfo `json:"rate_limit,omitempty"`
-	}{brief.Build(*tk, convs, complete, t.Now()), t.rateLimit()}
-	b, _ := json.Marshal(out)
+		Brief         brief.Brief    `json:"brief"`
+		SecurityNotes []string       `json:"security_notes,omitempty"`
+		RateLimit     *rateLimitInfo `json:"rate_limit,omitempty"`
+	}{bf, notes, t.rateLimit()}
+	b, _ := marshal(out)
 	return string(b), nil
 }
 
@@ -81,7 +90,7 @@ func (t *toolset) findSimilar() mcp.Tool {
 		Name: "freshdesk_find_similar_tickets",
 		Description: "Find tickets that look related to a given ticket by comparing their words (TF-IDF), and say which shared words caused each match. " +
 			"It compares against the most recently updated tickets Freshdesk returns (by default only the last 30 days; pass updated_since to look further back), " +
-			"so it is a quick lead, not a complete duplicate check. Computed locally; no AI service is used.",
+			"so it is a quick lead, not a complete duplicate check. Computed locally; no AI service is used." + untrustedNote,
 		InputSchema: object(props{
 			"ticket_id":       ticketID,
 			"limit":           integer("How many matches to return.", 1, 10, 5),
@@ -99,6 +108,8 @@ type similarMatch struct {
 	UpdatedAt   string   `json:"updated_at,omitempty"`
 	Score       float64  `json:"score"`
 	SharedTerms []string `json:"shared_terms"`
+	// SecurityNotes is set when that ticket's text looked like an attack.
+	SecurityNotes []string `json:"security_notes,omitempty"`
 }
 
 func (t *toolset) handleSimilar(ctx context.Context, raw json.RawMessage) (string, error) {
@@ -153,7 +164,7 @@ func (t *toolset) handleSimilar(ctx context.Context, raw json.RawMessage) (strin
 	matches := make([]similarMatch, 0, len(ranked))
 	for _, m := range ranked {
 		c := byID[m.ID]
-		matches = append(matches, similarMatch{m.ID, clip(c.Subject, 150), c.StatusLabel, c.UpdatedAt, m.Score, m.SharedTerms})
+		matches = append(matches, similarMatch{m.ID, shield.Fence(clip(c.Subject, 150)), c.StatusLabel, c.UpdatedAt, m.Score, m.SharedTerms, c.SecurityNotes})
 	}
 	return fit(matches, t.MaxResultBytes, func(shown []similarMatch, cut bool) any {
 		return struct {

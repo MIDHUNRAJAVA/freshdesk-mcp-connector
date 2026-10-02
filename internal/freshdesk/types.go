@@ -30,6 +30,9 @@ type Ticket struct {
 	DueBy           string         `json:"due_by,omitempty"`
 	Requester       *Requester     `json:"requester,omitempty"`
 	Conversations   []Conversation `json:"conversations,omitempty"`
+	// SecurityNotes is filled by the connector (never by Freshdesk): what the
+	// shield found in the text. See internal/shield.
+	SecurityNotes []string `json:"security_notes,omitempty"`
 }
 
 type Conversation struct {
@@ -45,6 +48,8 @@ type Conversation struct {
 	BccEmails []string `json:"bcc_emails,omitempty"`
 	CreatedAt string   `json:"created_at,omitempty"`
 	UpdatedAt string   `json:"updated_at,omitempty"`
+	// SecurityNotes is filled by the connector: what the shield found in the text.
+	SecurityNotes []string `json:"security_notes,omitempty"`
 }
 
 // Freshdesk status and priority codes, from its public API documentation.

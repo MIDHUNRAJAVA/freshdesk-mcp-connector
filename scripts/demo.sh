@@ -39,6 +39,9 @@ session() {
       call 4 freshdesk_ticket_brief '{"ticket_id":201}'
       call 5 freshdesk_find_similar_tickets '{"ticket_id":201,"updated_since":"2020-01-01"}'
       call 6 freshdesk_get_ticket '{"ticket_id":999}'
+      # Two invented attack tickets: the shield fences the text and adds security_notes.
+      call 7 freshdesk_get_ticket '{"ticket_id":211}'
+      call 8 freshdesk_list_conversations '{"ticket_id":212}'
       ;;
     flaky)
       for i in 2 3 4 5 6 7; do call "$i" freshdesk_get_ticket "{\"ticket_id\":$((199 + i))}"; done
@@ -62,6 +65,12 @@ if "content" in r:
     t = r["content"][0]["text"]
     flag = "ERROR " if r.get("isError") else ""
     print("<- id=%s %s%s" % (m["id"], flag, t if len(t) < 700 else t[:700] + " ..."))
+    # Show what the prompt-injection shield found, in short.
+    if "security_notes" in t:
+        d = json.loads(t)
+        for x in [d.get("ticket", {})] + d.get("conversations", []):
+            for n in x.get("security_notes", []):
+                print("   SHIELD CAUGHT: %s" % n)
 else:
     print("<- id=%s %s" % (m.get("id"), json.dumps(r)[:200]))'
   else

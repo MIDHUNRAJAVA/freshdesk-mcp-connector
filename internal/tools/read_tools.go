@@ -26,7 +26,7 @@ func (t *toolset) listTickets() mcp.Tool {
 	return mcp.Tool{
 		Name: "freshdesk_list_tickets",
 		Description: "List tickets, newest activity first by default. Returns one page. By default Freshdesk only lists tickets created in the last 30 days; " +
-			"pass updated_since to reach older ones. The status filter applies to the returned page only; use freshdesk_search_tickets to filter across all tickets.",
+			"pass updated_since to reach older ones. The status filter applies to the returned page only; use freshdesk_search_tickets to filter across all tickets." + untrustedNote,
 		InputSchema: object(props{
 			"page":              integer("Page number, starting at 1.", 1, 1000, 1),
 			"per_page":          integer("Tickets per page.", 1, 100, 20),
@@ -79,6 +79,7 @@ func (t *toolset) handleList(ctx context.Context, raw json.RawMessage) (string, 
 	}
 	for i := range page.Tickets {
 		t.prepare(&page.Tickets[i])
+		fenceTicket(&page.Tickets[i])
 	}
 	return fit(page.Tickets, t.MaxResultBytes, func(shown []freshdesk.Ticket, cut bool) any {
 		return struct {
@@ -99,7 +100,7 @@ func (t *toolset) getTicket() mcp.Tool {
 	return mcp.Tool{
 		Name: "freshdesk_get_ticket",
 		Description: "Get one ticket by number, with its requester. Optionally include the first batch of replies; " +
-			"Freshdesk limits how many it embeds, so use freshdesk_list_conversations for a long thread.",
+			"Freshdesk limits how many it embeds, so use freshdesk_list_conversations for a long thread." + untrustedNote,
 		InputSchema: object(props{
 			"ticket_id":             ticketID,
 			"include_conversations": boolean("Also include the first replies and notes.", false),
@@ -121,6 +122,7 @@ func (t *toolset) handleGet(ctx context.Context, raw json.RawMessage) (string, e
 		return "", toolError(err)
 	}
 	t.prepare(tk)
+	fenceTicket(tk)
 	convs := tk.Conversations
 	return fit(convs, t.MaxResultBytes, func(shown []freshdesk.Conversation, cut bool) any {
 		copyOf := *tk
@@ -140,7 +142,7 @@ func (t *toolset) searchTickets() mcp.Tool {
 		Name: "freshdesk_search_tickets",
 		Description: "Search tickets with Freshdesk's query syntax, for example: status:2 AND priority:3, or tag:'refund', or created_at:>'2026-01-01'. " +
 			"Use single quotes for text values. Results come 30 per page and Freshdesk allows at most 10 pages, so at most 300 matches are reachable; narrow the query instead of paging deeper. " +
-			"Status codes: 2 open, 3 pending, 4 resolved, 5 closed. Priority codes: 1 low, 2 medium, 3 high, 4 urgent.",
+			"Status codes: 2 open, 3 pending, 4 resolved, 5 closed. Priority codes: 1 low, 2 medium, 3 high, 4 urgent." + untrustedNote,
 		InputSchema: object(props{
 			"query": text("Freshdesk search query, without surrounding double quotes. Max 500 characters."),
 			"page":  integer("Page number, 1 to 10.", 1, freshdesk.MaxSearchPages, 1),
@@ -163,6 +165,7 @@ func (t *toolset) handleSearch(ctx context.Context, raw json.RawMessage) (string
 	}
 	for i := range res.Tickets {
 		t.prepare(&res.Tickets[i])
+		fenceTicket(&res.Tickets[i])
 	}
 	capNote := ""
 	if res.Total > freshdesk.MaxSearchPages*freshdesk.SearchPageSize {
@@ -187,7 +190,7 @@ func (t *toolset) handleSearch(ctx context.Context, raw json.RawMessage) (string
 func (t *toolset) listConversations() mcp.Tool {
 	return mcp.Tool{
 		Name:        "freshdesk_list_conversations",
-		Description: "List the replies and internal notes on a ticket, oldest first. incoming=true means the customer wrote it; private=true means it is an internal note.",
+		Description: "List the replies and internal notes on a ticket, oldest first. incoming=true means the customer wrote it; private=true means it is an internal note." + untrustedNote,
 		InputSchema: object(props{
 			"ticket_id": ticketID,
 			"page":      integer("Page number, starting at 1.", 1, 1000, 1),
@@ -215,6 +218,7 @@ func (t *toolset) handleConversations(ctx context.Context, raw json.RawMessage) 
 	}
 	for i := range convs {
 		t.prepareConversation(&convs[i])
+		fenceConversation(&convs[i])
 	}
 	return fit(convs, t.MaxResultBytes, func(shown []freshdesk.Conversation, cut bool) any {
 		return struct {

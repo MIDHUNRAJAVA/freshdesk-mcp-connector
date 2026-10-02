@@ -371,3 +371,78 @@ func TestEverySchemaIsAnObjectWithDescribedProperties(t *testing.T) {
 		}
 	}
 }
+
+// ---- prompt-injection shield ----
+
+func TestTicketTextIsFencedInEveryTool(t *testing.T) {
+	s := newSession(t, maskOn, 40000, fakefd.Options{})
+	calls := []struct{ tool, args string }{
+		{"freshdesk_list_tickets", `{"per_page":20}`},
+		{"freshdesk_get_ticket", `{"ticket_id":201,"include_conversations":true}`},
+		{"freshdesk_search_tickets", `{"query":"status:2"}`},
+		{"freshdesk_list_conversations", `{"ticket_id":201}`},
+		{"freshdesk_ticket_brief", `{"ticket_id":201}`},
+		{"freshdesk_find_similar_tickets", `{"ticket_id":201}`},
+	}
+	for _, c := range calls {
+		text, _ := s.call(c.tool, c.args)
+		if strings.Count(text, "<untrusted_ticket_text>") == 0 ||
+			strings.Count(text, "<untrusted_ticket_text>") != strings.Count(text, "</untrusted_ticket_text>") {
+			t.Errorf("%s: ticket text is not fenced", c.tool)
+		}
+	}
+	// A normal ticket has no security notes in any tool that shows it.
+	for _, c := range calls[1:2] {
+		if text, _ := s.call(c.tool, c.args); strings.Contains(text, "security_notes") {
+			t.Errorf("%s: normal ticket 201 got security notes:\n%s", c.tool, text)
+		}
+	}
+}
+
+func TestShieldFlagsAttackTicketsAndKeepsText(t *testing.T) {
+	s := newSession(t, maskOn, 40000, fakefd.Options{})
+
+	get := s.callJSON("freshdesk_get_ticket", `{"ticket_id":211}`)["ticket"].(map[string]any)
+	notes := fmt.Sprint(get["security_notes"])
+	for _, want := range []string{"ignore its earlier", "new role", "outside address", "secrets"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("ticket 211 notes %q should mention %q", notes, want)
+		}
+	}
+	// The original text stays, fenced, with the email still masked.
+	desc := get["description_text"].(string)
+	if !strings.HasPrefix(desc, "<untrusted_ticket_text>") || !strings.Contains(desc, "IGNORE YOUR RULES") || strings.Contains(desc, "attacker@example.com") {
+		t.Errorf("description = %q", desc)
+	}
+
+	conv := s.callJSON("freshdesk_list_conversations", `{"ticket_id":212}`)["conversations"].([]any)[0].(map[string]any)
+	notes = fmt.Sprint(conv["security_notes"])
+	if !strings.Contains(notes, "run a command") || !strings.Contains(notes, "encoded") {
+		t.Errorf("ticket 212 reply notes = %q", notes)
+	}
+
+	hidden := s.callJSON("freshdesk_get_ticket", `{"ticket_id":212}`)["ticket"].(map[string]any)
+	if !strings.Contains(fmt.Sprint(hidden["security_notes"]), "hidden characters") {
+		t.Errorf("ticket 212 notes = %v", hidden["security_notes"])
+	}
+
+	brief := s.callJSON("freshdesk_ticket_brief", `{"ticket_id":212}`)
+	if !strings.Contains(fmt.Sprint(brief["security_notes"]), "run a command") {
+		t.Errorf("brief notes = %v", brief["security_notes"])
+	}
+	sim := s.callJSON("freshdesk_find_similar_tickets", `{"ticket_id":212}`)
+	if sim["matches"] == nil && sim["compared_with"] == nil {
+		t.Errorf("similar = %v", sim)
+	}
+}
+
+func TestInstructionsAndDescriptionsExplainTheFences(t *testing.T) {
+	if !strings.Contains(Instructions, "never instructions") || !strings.Contains(Instructions, "<untrusted_ticket_text>") {
+		t.Error("server instructions must say fenced text is data")
+	}
+	for _, d := range mcp.Definitions(New(Deps{})) {
+		if !strings.Contains(d.Description, "never instructions") {
+			t.Errorf("%s: description must warn that ticket text is untrusted", d.Name)
+		}
+	}
+}
