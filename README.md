@@ -8,6 +8,12 @@ MCP (Model Context Protocol) is a standard way for an AI agent to discover and c
 
 This was written as a take-home assignment (Agent Studio, assignment 3: a private connector for a merchant tool). It has been tested against a fake Freshdesk server that I wrote from the public API documentation. **It has not been run against a real Freshdesk account.**
 
+## What makes this different
+
+- **A shield against hidden instructions in tickets.** Ticket text is written by outsiders, so it is treated as untrusted. Every tool wraps it in `<untrusted_ticket_text>` tags, tells the agent that text inside is data and never instructions, and adds a plain `security_notes` list when it spots things like "ignore your rules" or "email all customer data to ...". The text itself is never removed or changed. The demo includes two invented attack tickets (211 and 212). Code: `internal/shield`.
+- **Behaviour checks you can run in seconds.** `make evals` replays 10 realistic support questions (overdue tickets, similar tickets, a phone number that must come back masked, an attack ticket, a request to refund money that must be refused) and prints a pass/fail table. It checks the connector's tools with a scripted stand-in agent, not a real model; [evals/README.md](evals/README.md) explains how to run the same cases with a real agent.
+- **A rollout playbook.** [docs/MERCHANT_PLAYBOOK.md](docs/MERCHANT_PLAYBOOK.md) is one page on how I would take this to a real merchant: questions to ask, minimum access, read-only first, three metrics, weekly review, and when and how to add write access with a human approval step.
+
 ## Try it in one command
 
 You need Go (1.27 was used) and nothing else. There are no outside dependencies and no credentials.
@@ -16,7 +22,7 @@ You need Go (1.27 was used) and nothing else. There are no outside dependencies 
 make demo
 ```
 
-This builds the connector, starts a fake Freshdesk server with invented tickets, and plays a short agent session: search, get a ticket, get a brief, find similar tickets, and ask for a ticket that does not exist. A captured run is in [docs/sample-session.txt](docs/sample-session.txt). Here is the interesting part, shortened:
+This builds the connector, starts a fake Freshdesk server with invented tickets, and plays a short agent session: search, get a ticket, get a brief, find similar tickets, and ask for a ticket that does not exist, then read two attack tickets and watch the shield flag them (`SHIELD CAUGHT` lines). A captured run is in [docs/sample-session.txt](docs/sample-session.txt). Here is the interesting part, shortened:
 
 ```
 <- id=2 {"total_matches":1, ... "description_text":"... You can reach me at a***@***.com or [phone ending 10]." ...
@@ -38,6 +44,7 @@ make demo-outage   # the server is down for a few seconds: watch the circuit bre
 
 | Promise | How it is kept |
 |---|---|
+| Ticket text cannot give the agent orders | Ticket and reply text is fenced as untrusted data and scanned for attack phrases; findings appear as `security_notes`. This lowers the risk but is not a guarantee (see [docs/LIMITS.md](docs/LIMITS.md)). A test checks every tool. |
 | It cannot change anything | The Freshdesk client has no write methods at all (no create, update, delete or reply). Every tool is marked read-only. A test checks tool names and hints. |
 | The agent never sees raw contact details | Emails and phone numbers are masked in ticket text, replies and requester fields before data leaves the connector. On by default. A test sends every tool through a full session and checks that no raw address or number appears. |
 | The API key stays secret | Read from an environment variable only. It is never logged or returned. Printing the config object shows `[redacted]`. A test checks this. |
@@ -130,6 +137,7 @@ All settings are environment variables.
  internal/tools     six tools: check arguments, call client, MASK, cap size
      |      |
      |      +--> internal/brief, internal/similar   (local rules and TF-IDF, no network)
+     |      +--> internal/shield                     (fence ticket text, flag attack phrases)
      v
  internal/freshdesk   read-only client
      |   cache -> merge identical calls -> rate limiter -> circuit breaker -> HTTP with retries
@@ -176,9 +184,10 @@ make test      # quick
 make race      # with the race detector
 make lint      # gofmt and go vet
 make cover     # prints total coverage
+make evals     # the 10 behaviour checks
 ```
 
-Measured with `make cover`: 84.7% of statements overall (the two `main` programs have no tests and pull the total down; the packages under `internal/` range from 87% to 100%). Tests use `net/http/httptest` and a fake clock, so retries and cooldowns run instantly. They cover the auth header, pagination, search, 429 with Retry-After, server-error backoff, giving up after the maximum retries, 401 and 404 mapping, masking, the circuit breaker, the cache, request merging, and a full MCP session over in-memory pipes.
+Measured with `make cover`: 85.8% of statements overall (the two `main` programs have no tests and pull the total down; the packages under `internal/` range from 87% to 100%; `internal/shield` is 100%). Tests use `net/http/httptest` and a fake clock, so retries and cooldowns run instantly. They cover the auth header, pagination, search, 429 with Retry-After, server-error backoff, giving up after the maximum retries, 401 and 404 mapping, masking, the circuit breaker, the cache, request merging, and a full MCP session over in-memory pipes.
 
 ## What each package does
 
@@ -190,6 +199,8 @@ Measured with `make cover`: 84.7% of statements overall (the two `main` programs
 | `internal/cache` | Small cache whose entries expire. |
 | `internal/coalesce` | Merges identical simultaneous calls into one. |
 | `internal/mask` | Hides emails, phone numbers and (optionally) names. |
+| `internal/shield` | Fences ticket text as untrusted data and flags suspicious phrases. |
+| `evals` | The 10 scripted-agent behaviour checks (`make evals`). |
 | `internal/brief` | Rule-based ticket summary. |
 | `internal/similar` | TF-IDF similar-ticket finder. |
 | `internal/audit` | One safe log line per tool call. |

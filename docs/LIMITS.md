@@ -17,7 +17,8 @@
 **Safety**
 - Masking covers emails and phone numbers. It does not detect street addresses, card numbers written as words, government IDs, or names (names are optional). Free-text ticket bodies can contain anything.
 - Patterns can over-mask: a long digit string such as an order number may be hidden as if it were a phone number.
-- Masking does not stop an agent from acting on what it reads. Treat ticket text as untrusted input: a customer can write instructions inside a ticket. The connector has no write tools, which limits the damage, but the agent host should still treat tool output as data.
+- Masking does not stop an agent from acting on what it reads. A customer can write instructions inside a ticket. The connector fences all ticket text as untrusted data and adds `security_notes` for suspicious phrases, but this only lowers the risk. A model may still follow a fenced instruction, and a rewritten, misspelled, non-English or split-up attack can slip past the plain rules. The rules can also flag harmless text (for example a customer quoting "ignore the previous email" is not flagged, but unusual wording might be). The connector has no write tools, which limits the damage, and the agent host should still treat tool output as data.
+- The fence tag is renamed inside ticket text, so a ticket that literally contains `untrusted_ticket_text` is shown with dashes instead.
 
 **Reliability**
 - Rate limits depend on the Freshdesk plan and can differ per endpoint. I did not hard-code any numbers; `FRESHDESK_REQUESTS_PER_MINUTE` is yours to set.
@@ -29,6 +30,9 @@
 - The brief and similar-ticket finder are rule-based and word-based. They do not understand meaning, other languages are handled only as far as words split on letters, and the suggestions are hints.
 - Similar tickets are searched only among the most recently updated tickets Freshdesk returns (up to 300), not the whole history.
 - Reading the whole conversation for a brief costs extra requests (one per 100 messages).
+
+**The behaviour checks**
+- The 10 cases in `evals/` use a scripted agent, not a real model, and the fake server's invented data. They check the connector's tools only. They say nothing about how well a real agent answers, and they have not been run with a real Agent Studio agent.
 
 **Not built**
 - No webhooks, no incremental sync, no write actions, no attachment download, no multi-account support, no metrics endpoint.
