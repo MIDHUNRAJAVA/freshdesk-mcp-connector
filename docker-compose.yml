@@ -1,0 +1,25 @@
+# Try the connector with no Freshdesk account:
+#   docker compose up --build -d fake
+#   docker compose run --rm -T mcp < scripts/sample-requests.jsonl
+#   docker compose down
+# "fake" is a pretend Freshdesk with invented tickets. The connector refuses
+# to send an API key over plain http unless the address is localhost, so the
+# "mcp" service shares the fake server's network and reaches it at localhost.
+services:
+  fake:
+    build: .
+    image: freshdesk-mcp-connector
+    entrypoint: ["/usr/local/bin/fake-freshdesk", "-addr", "0.0.0.0:8089"]
+    ports:
+      - "127.0.0.1:8089:8089"
+
+  mcp:
+    image: freshdesk-mcp-connector
+    depends_on:
+      - fake
+    network_mode: "service:fake"
+    stdin_open: true
+    environment:
+      FRESHDESK_API_KEY: demo-key
+      FRESHDESK_BASE_URL: http://localhost:8089/api/v2
+    profiles: ["run"]

@@ -67,6 +67,25 @@ Names are not masked unless you turn on `FRESHDESK_MASK_NAMES` (then they become
 
 The full machine-readable specification, with input schemas, is in [docs/mcp-tools.json](docs/mcp-tools.json). A test fails if that file gets out of date.
 
+## Run it with Docker
+
+No Go install needed. The image is small (about 26 MB), has no shell, and runs as a non-root user.
+
+```
+docker compose up --build -d fake                          # a pretend Freshdesk with invented tickets
+docker compose run --rm -T mcp < scripts/sample-requests.jsonl   # a short MCP session
+docker compose down
+```
+
+Against a real Freshdesk account, keep the key out of the image and pass it when you run:
+
+```
+docker build -t freshdesk-mcp-connector .
+docker run --rm -i -e FRESHDESK_DOMAIN=yourcompany -e FRESHDESK_API_KEY freshdesk-mcp-connector
+```
+
+The connector talks over standard input and output, so it opens no network port. It also refuses to send an API key over plain `http` unless the address is `localhost`, so in the compose demo the two containers share one network and reach each other at `localhost`.
+
 ## Setup and run (real Freshdesk)
 
 1. In Freshdesk, create or choose an agent account with the least access that still lets it see the tickets you need (a read-focused role). Find its API key under your profile settings. Never reuse an administrator's key.
