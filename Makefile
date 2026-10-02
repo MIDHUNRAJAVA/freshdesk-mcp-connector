@@ -1,4 +1,4 @@
-.PHONY: build test race lint cover demo demo-flaky demo-outage tools-json clean
+.PHONY: evals build test race lint cover demo demo-flaky demo-outage tools-json clean
 
 build:
 	go build -o bin/ ./cmd/...
@@ -36,3 +36,7 @@ demo-outage: build
 
 clean:
 	rm -rf bin coverage.txt
+
+# Replays 10 support questions against the fake server with a scripted agent.
+evals:
+	go run ./evals
