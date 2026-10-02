@@ -1,0 +1,244 @@
+{
+  "tools": [
+    {
+      "name": "freshdesk_list_tickets",
+      "description": "List tickets, newest activity first by default. Returns one page. By default Freshdesk only lists tickets created in the last 30 days; pass updated_since to reach older ones. The status filter applies to the returned page only; use freshdesk_search_tickets to filter across all tickets.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "description": "A Freshdesk preset list.",
+            "enum": [
+              "new_and_my_open",
+              "watching",
+              "spam",
+              "deleted"
+            ],
+            "type": "string"
+          },
+          "include_requester": {
+            "default": true,
+            "description": "Include the requester (name, masked email and phone).",
+            "type": "boolean"
+          },
+          "order_by": {
+            "description": "Sort field.",
+            "enum": [
+              "created_at",
+              "due_by",
+              "updated_at",
+              "status"
+            ],
+            "type": "string"
+          },
+          "order_type": {
+            "description": "Sort direction.",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "description": "Page number, starting at 1.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "per_page": {
+            "default": 20,
+            "description": "Tickets per page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "status": {
+            "description": "Keep only tickets with this status (applied to this page).",
+            "enum": [
+              "open",
+              "pending",
+              "resolved",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "updated_since": {
+            "description": "Only tickets updated after this time, as 2026-01-31 or 2026-01-31T09:00:00Z.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "freshdesk_get_ticket",
+      "description": "Get one ticket by number, with its requester. Optionally include the first batch of replies; Freshdesk limits how many it embeds, so use freshdesk_list_conversations for a long thread.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_conversations": {
+            "default": false,
+            "description": "Also include the first replies and notes.",
+            "type": "boolean"
+          },
+          "ticket_id": {
+            "description": "The Freshdesk ticket number.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "freshdesk_search_tickets",
+      "description": "Search tickets with Freshdesk's query syntax, for example: status:2 AND priority:3, or tag:'refund', or created_at:\u003e'2026-01-01'. Use single quotes for text values. Results come 30 per page and Freshdesk allows at most 10 pages, so at most 300 matches are reachable; narrow the query instead of paging deeper. Status codes: 2 open, 3 pending, 4 resolved, 5 closed. Priority codes: 1 low, 2 medium, 3 high, 4 urgent.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "default": 1,
+            "description": "Page number, 1 to 10.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "description": "Freshdesk search query, without surrounding double quotes. Max 500 characters.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "freshdesk_list_conversations",
+      "description": "List the replies and internal notes on a ticket, oldest first. incoming=true means the customer wrote it; private=true means it is an internal note.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "default": 1,
+            "description": "Page number, starting at 1.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "per_page": {
+            "default": 20,
+            "description": "Messages per page.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ticket_id": {
+            "description": "The Freshdesk ticket number.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "freshdesk_ticket_brief",
+      "description": "A short, rule-based summary of one ticket: who is waiting and for how long, the customer's last message, whether it is past its due time, warning signs, and a suggested next step. Computed locally from the ticket and its replies; no AI service is used. The suggestion is a hint for a person or agent to review, not an action taken.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ticket_id": {
+            "description": "The Freshdesk ticket number.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "freshdesk_find_similar_tickets",
+      "description": "Find tickets that look related to a given ticket by comparing their words (TF-IDF), and say which shared words caused each match. It compares against the most recently updated tickets Freshdesk returns (by default only the last 30 days; pass updated_since to look further back), so it is a quick lead, not a complete duplicate check. Computed locally; no AI service is used.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_pages": {
+            "default": 2,
+            "description": "How many pages of 100 recent tickets to compare against.",
+            "maximum": 3,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 5,
+            "description": "How many matches to return.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ticket_id": {
+            "description": "The Freshdesk ticket number.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "updated_since": {
+            "description": "Compare against tickets updated after this date, as 2026-01-31.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    }
+  ]
+}
